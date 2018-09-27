@@ -1,0 +1,138 @@
+---
+title: "Toy Example"
+author: "Danielle Navarro"
+date: "27/09/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## The prior
+
+The toy example consists of a set of six competing hypotheses about a target category of animal, which we presume to be equally plausible a priori:
+
+```{r prior}
+hypotheses <- c(
+  "canine","ursine","placental",   # labels
+  "macropod","marsupial","mammals"
+)
+nh <- length(hypotheses)    # number of hypotheses
+prior <- rep.int(1/nh, nh)  # prior is 1/n_h for all h
+names(prior) <- hypotheses  # attach labels
+
+prior
+```
+
+The reason for assuming a uniform prior is that the prior corresponds to the learner's subjective belief about which category the speaker (person constructing the argument) is referring to, *not* the probability that a randomly sampled animal would belong to these categories. These are fundamentally different things. The uniform prior is still extremely unrealistic (of course!), but the correct answer would not be to look at the size of the category but rather the frequency with which people *make arguments pertaining to* those categories.
+
+
+
+## The likelihoods
+
+Each of these hypothesised categories is (somewhat simplistically - it's a toy example after all) assumed to consist of a finite set of species. So the *size* of each hypothesis is (per Tenenbaum & Griffiths 2001) corresponds to the number of species in each category. Using Wikipedia to set somewhat reasonable numbers for these sizes:
+
+```{r sizes}
+size <- c(36, 8, 4000, 59, 334, 5000)
+names(size) <- hypotheses
+size
+```
+
+Obviously, in the full example we're not going to consider all 10,000 possible species that belong in each of these categories, but instead plot the results a small subset of 6 entities:
+
+```{r cars}
+entities <- c("dog","wolf","bear","wallaby","kangaroo","koala")
+ne <- length(entities)
+```
+
+So now we'll specify the likelihood function for those six entities and hypotheses, under the *strong sampling* assumption that for each category we assume observations are sampled uniformly at random from the species that fall within that category. So for the subset of entities we have this...
+
+
+```{r likelihood}
+# initialise as a matrix of zeross
+strong_likelihood <- matrix(0, nh, ne)
+rownames(strong_likelihood) <- hypotheses
+colnames(strong_likelihood) <- entities
+
+# uniform sampling from the category
+strong_likelihood["canine", c("dog", "wolf")] <- 1/size["canine"]
+strong_likelihood["ursine", "bear"] <- 1/size["ursine"]
+strong_likelihood["macropod", c("wallaby", "kangaroo")] <- 1/size["macropod"]
+strong_likelihood["marsupial", c("wallaby", "kangaroo", "koala")] <- 1/size["marsupial"]
+strong_likelihood["placental", c("dog", "wolf", "bear")] <- 1/size["placental"]
+strong_likelihood["mammals",] <- 1/size["mammals"]
+
+# print
+print(strong_likelihood, digits = 4)
+```
+
+For weak sampling, the likelihood function is proportional to a constant quantity for all true statements (e.g., a dog is a canine) and zero for false facts (e.g. a dog is a marsupial). So, up to a constant of proportionality (not relevant for current purposes)
+
+```{r likelihood2}
+weak_likelihood <- strong_likelihood
+weak_likelihood[weak_likelihood != 0] <- 1
+print(weak_likelihood)
+```
+
+## Posterior probabilities
+
+Next, we define a simple function implementing Bayesian reasoning for the toy problem:
+
+```{r}
+get_posterior <- function(data, prior, likelihood){
+  post <- prior # start with the prior
+  n <- length(data)
+  for(i in 1:n) { # loop over the observations
+    post <- post * likelihood[, data[i]] # multiply prior by likelihood
+  }
+  post <- post / sum(post) # normalise by so that posterior sums to 1
+  return(post)
+}
+```
+
+There are two data sets we consider:
+
+```{r}
+nondiverse <- c("dog", "wolf")
+diverse <- c("dog", "koala")
+```
+
+Since we have a diverse data set and a nondiverse one, as well as a strong sampling model and a weak sampling one, there are four posteriors to compute:
+
+```{r}
+posterior_ns <- get_posterior(nondiverse, prior, strong_likelihood)
+posterior_nw <- get_posterior(nondiverse, prior, weak_likelihood)
+posterior_ds <- get_posterior(diverse, prior, strong_likelihood)
+posterior_dw <- get_posterior(diverse, prior, weak_likelihood)
+```
+
+Now to draw the picture. First define a plotting function:
+
+```{r}
+draw_posterior <- function(posterior, data, main) {
+  barplot(posterior, ylim=c(0, 1.05), las=2, 
+          ylab="Probability", main=main)
+  text(2.5, .90, data[1])
+  text(2.5, .75, data[2])
+  lines(x = c(0,nh+1.5), y = c(1,1)/nh, lty=2)
+  box()
+}
+```
+
+Next I'll apply it to all four cases:
+
+```{r}
+layout(matrix(1:4,2,2))
+draw_posterior(posterior_ns, nondiverse, "Non-diverse evidence\nStrong sampling")
+draw_posterior(posterior_nw, nondiverse, "Non-diverse evidence\nWeak sampling")
+draw_posterior(posterior_ds, diverse, "Diverse evidence\nStrong sampling")
+draw_posterior(posterior_dw, diverse, "Diverse evidence\nWeak sampling")
+layout(1)
+```
+
+To understand why this is happening, when the evidence is diverse there is only one hypothesis (mammals) that is consistent with both observations so it necessarily ends up with posterior probability 1 under both sampling models.
+
+For the nondiverse evidence, there are three hypotheses that are consistent with the data. The likelihood function rules out the other three (because probability of the data given the ht)
+
+
